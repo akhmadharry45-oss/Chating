@@ -1,7 +1,7 @@
 // Service worker Chat Kelas: mengutamakan jaringan, jadi pembaruan index.html langsung terlihat.
 // Berkas aplikasi disimpan sebagai cadangan agar aplikasi tetap terbuka saat sinyal buruk.
 const CACHE = 'chat-kelas-v1';
-const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'];
+const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
