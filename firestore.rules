@@ -1,0 +1,119 @@
+rules_version = '2';
+
+// Aturan keamanan Chat Kelas.
+// Ganti email di fungsi admins() dengan email Google admin kelas
+// (harus sama dengan ADMIN_EMAILS di index.html), lalu tempel seluruh isi file ini
+// ke Firebase Console > Firestore Database > Rules > Publish.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function admins() {
+      return ['akhmadharry45@guru.sd.belajar.id'];
+    }
+    function signedIn() {
+      return request.auth != null;
+    }
+    function isAdmin() {
+      return signedIn()
+        && 'email' in request.auth.token
+        && request.auth.token.email_verified == true
+        && request.auth.token.email in admins();
+    }
+    function memberPath(uid) {
+      return /databases/$(database)/documents/members/$(uid);
+    }
+    function isMember() {
+      return signedIn() && exists(memberPath(request.auth.uid));
+    }
+    function staff() {
+      return isAdmin() || isMember();
+    }
+    function memberName() {
+      return get(memberPath(request.auth.uid)).data.name;
+    }
+
+    // Kode kelas: hanya admin yang boleh membaca dan mengubah.
+    match /secret/{doc} {
+      allow read, write: if isAdmin();
+    }
+
+    // Nama kelas.
+    match /config/{doc} {
+      allow read: if staff();
+      allow write: if isAdmin();
+    }
+
+    // Siswa mendaftar sendiri dengan nama dan kode kelas yang benar.
+    match /members/{uid} {
+      allow read: if isAdmin() || (signedIn() && request.auth.uid == uid);
+      allow create, update: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['name', 'code', 'ts'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 40
+        && request.resource.data.code == get(/databases/$(database)/documents/secret/code).data.code;
+      allow delete: if isAdmin();
+    }
+
+    // Chat: semua anggota membaca dan menulis. Hapus: admin atau pengirimnya.
+    match /messages/{id} {
+      allow read: if staff();
+      allow create: if staff()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.admin == isAdmin()
+        && request.resource.data.type in ['text', 'sticker']
+        && (isAdmin() || request.resource.data.name == memberName());
+      allow delete: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
+    }
+
+    // Pengumuman, tugas, jadwal, sesi absensi: semua anggota membaca, hanya admin menulis.
+    match /announcements/{id} {
+      allow read: if staff();
+      allow write: if isAdmin();
+    }
+    match /tasks/{id} {
+      allow read: if staff();
+      allow write: if isAdmin();
+    }
+    match /schedule/{id} {
+      allow read: if staff();
+      allow write: if isAdmin();
+    }
+    match /attendance/{id} {
+      allow read: if staff();
+      allow write: if isAdmin();
+    }
+
+    // Lampiran file pada tugas (file kecil disimpan sebagai teks base64).
+    // Semua anggota membaca, hanya admin menambah dan menghapus.
+    match /files/{fid} {
+      allow read: if staff();
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasOnly(['name', 'type', 'size', 'data', 'ts'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() <= 200
+        && request.resource.data.type is string
+        && request.resource.data.size is number
+        && request.resource.data.size <= 700000
+        && request.resource.data.data is string
+        && request.resource.data.data.size() <= 950000;
+      allow delete: if isAdmin();
+    }
+
+    // Jawaban absensi: dokumen bernama "<idSesi>_<idSiswa>".
+    // Siswa hanya menulis miliknya sendiri dan hanya saat sesi dibuka.
+    // Siswa hanya membaca miliknya; admin membaca semuanya.
+    match /absen/{rid} {
+      allow read: if isAdmin() || (isMember() && resource.data.uid == request.auth.uid);
+      allow create, update: if isMember()
+        && request.resource.data.uid == request.auth.uid
+        && rid == request.resource.data.sid + '_' + request.auth.uid
+        && request.resource.data.status in ['hadir', 'izin', 'sakit']
+        && request.resource.data.name == memberName()
+        && get(/databases/$(database)/documents/attendance/$(request.resource.data.sid)).data.open == true;
+      allow delete: if isAdmin();
+    }
+  }
+}

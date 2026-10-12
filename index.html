@@ -3,6 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#12906a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Chat Kelas">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
 <script>
 try{var _m=localStorage.getItem('kelas-mode');if(_m==='light'||_m==='dark')document.documentElement.dataset.theme=_m;
 var _a=localStorage.getItem('kelas-accent');if(_a&&/^[a-z-]+$/.test(_a))document.documentElement.dataset.accent=_a}catch(e){}
@@ -168,7 +175,7 @@ h2{margin:0;font-family:var(--font-display);font-size:19px;font-weight:700}
 .swatches{display:flex;gap:10px;flex-wrap:wrap}
 .sw{width:40px;height:40px;border-radius:50%;border:3px solid transparent;background:var(--c);padding:0;box-shadow:inset 0 0 0 2px var(--panel)}
 .sw[aria-pressed="true"]{border-color:var(--ink)}
-#accentBox,#adminSet{display:flex;flex-direction:column;gap:8px}
+#accentBox,#adminSet,#installBox{display:flex;flex-direction:column;gap:8px}
 .form input[type="file"]{padding:6px 8px}
 nav{display:flex;border-top:1px solid var(--line);background:var(--panel);padding-bottom:env(safe-area-inset-bottom,0px)}
 nav button{flex:1;min-width:0;border:0;background:none;padding:8px 2px 6px;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11px;font-weight:600;color:var(--muted)}
@@ -205,6 +212,7 @@ nav button[aria-selected="true"]{color:var(--accent)}
       <h2>Masuk sebagai admin</h2>
       <button class="gbtn" id="gLogin" type="button">Masuk dengan Google</button>
     </div>
+    <button class="gbtn" id="gateInstallBtn" type="button" hidden>Pasang aplikasi di HP</button>
     <div class="err" id="gateErr" role="alert"></div>
   </div>
 </div>
@@ -365,6 +373,11 @@ nav button[aria-selected="true"]{color:var(--accent)}
       <label for="setCode">Kode kelas (dibagikan ke siswa)</label>
       <input id="setCode" maxlength="40" autocomplete="off" placeholder="Contoh: bintang5a">
     </div>
+    <div id="installBox">
+      <label>Pasang di HP</label>
+      <button class="gbtn" type="button" id="installBtn" hidden>Pasang aplikasi</button>
+      <div class="subj">Android (Chrome): menu titik tiga, lalu Pasang aplikasi. iPhone (Safari): tombol Bagikan, lalu Tambahkan ke Layar Utama.</div>
+    </div>
     <div class="err" id="setErr" role="alert"></div>
     <div class="opts">
       <button class="btn" type="submit" id="setSave" hidden>Simpan</button>
@@ -373,6 +386,25 @@ nav button[aria-selected="true"]{color:var(--accent)}
   </form>
 </div>
 
+<script>
+/* Pemasangan aplikasi dan service worker. Dipisah dari script utama supaya tetap jalan walau Firebase gagal dimuat. */
+(function(){
+  var dp=null;
+  function standalone(){return (window.matchMedia&&matchMedia('(display-mode: standalone)').matches)||navigator.standalone===true}
+  function el(id){return document.getElementById(id)}
+  function sync(){
+    var can=!!dp&&!standalone();
+    ['installBtn','gateInstallBtn'].forEach(function(i){var e=el(i);if(e)e.hidden=!can});
+    var box=el('installBox');if(box)box.hidden=standalone();
+  }
+  window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();dp=e;sync()});
+  window.addEventListener('appinstalled',function(){dp=null;sync()});
+  function go(){if(!dp)return;dp.prompt();dp.userChoice.then(function(){dp=null;sync()},function(){})}
+  ['installBtn','gateInstallBtn'].forEach(function(i){var e=el(i);if(e)e.onclick=go});
+  sync();
+  if('serviceWorker' in navigator)window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){})});
+})();
+</script>
 <script type="module">
 import {initializeApp} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {getAuth,onAuthStateChanged,signInAnonymously,GoogleAuthProvider,signInWithPopup,signOut} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
